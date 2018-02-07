@@ -81,7 +81,7 @@ class analytical_solution:
             x_eval = np.array([x_eval])
         F_eval = np.zeros_like(x_eval)
         for n in range(len(self.cns)):
-            print("Analytical: {0} of {1}".format(n, len(self.cns)))
+            #print("Analytical: {0} of {1}".format(n, len(self.cns)))
             F_eval = F_eval + d*self.cns[n](x_eval) * \
                 (self.antideriv(self.b-x_eval,d,n)-self.antideriv(self.a-x_eval,d,n))
         return F_eval

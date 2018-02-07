@@ -3,17 +3,16 @@ import pickle
 import numpy as np
 from test_example import analytical_solution
 import matplotlib.pyplot as plt
-import matplotlib
 
 
-def fredholm_rhs(xc, F):
+def fredholm_rhs(xc, F, d):
     Nc = xc.shape[0]
     b = np.zeros(Nc)
     b = F(xc, d)
     return b
 
 
-def fredholm_lhs(xc, xs, xq, w, K):
+def fredholm_lhs(xc, xs, xq, d, w, K):
     Nc = xc.shape[0]
     Ns = xs.shape[0]
     Nq = xq.shape[0]
@@ -22,10 +21,8 @@ def fredholm_lhs(xc, xs, xq, w, K):
     for i in range(Nc):
         # print("{0} out of {1}.".format(i, Nc))
         for j in range(Ns):
-            term = 0
             for k in range(Nq):
-                term += lagrange_poly(xq[k], j, xs) * K(xc[i], xq[k]) * w[k]
-            A[i][j] = term
+                A[i][j] += lagrange_poly(xq[k], j, xs) * K(xc[i], xq[k], d) * w[k]
 
     return A
 
@@ -42,15 +39,15 @@ def lagrange_poly(xk, j, Xs):
     return li
 
 
-def kernel_fred(xc, xq):
-    return d / ((d ** 2 + (xc - xq) ** 2) ** (3 / 2))
+def kernel_fred(xc, xq, d):
+    return d / ((d**2 + (xc - xq)**2)**(3 / 2))
 
 
 def analytic_density(x, omega, gamma):
     return np.sin(omega * x) * np.exp(gamma * x)
 
 
-def newton_cotes(top_nq, xc, xs, rho, fa_eval):
+def newton_cotes(top_nq, xc, xs, rho, d, a, b, fa_eval):
     errors = []
     points = []
     for i in range(1, top_nq + 1):
@@ -58,14 +55,15 @@ def newton_cotes(top_nq, xc, xs, rho, fa_eval):
         w = np.repeat((b - a) / (i), i)
         xq = np.linspace(a, b, i, endpoint=False) + w / 2
         # print(xq)
-        A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
+        A = fredholm_lhs(xc, xs, xq, d, w, kernel_fred)
         Fd_vals = A.dot(rho)
-        diff = np.abs(Fd_vals - fa_eval)
-        errors.append(np.max(diff))
+        diff = Fd_vals - fa_eval
+        errors.append(np.linalg.norm(diff, np.Inf))
         points.append(Fd_vals)
     return errors, points
 
-def legendre_gauss(top_nq, xc, xs, rho, a, b, fa_eval):
+
+def legendre_gauss(top_nq, xc, xs, rho, d, a, b, fa_eval):
     errors = []
     points = []
     for i in range(1, top_nq + 1):
@@ -73,57 +71,61 @@ def legendre_gauss(top_nq, xc, xs, rho, a, b, fa_eval):
         xq,w = np.polynomial.legendre.leggauss(i)
         w = w * (b-a)/2
         xq = (b+a)/2 + xq*(b-a)/2
-        A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
+        A = fredholm_lhs(xc, xs, xq, d, w, kernel_fred)
         Fd_vals = A.dot(rho)
-        diff = np.abs(Fd_vals - fa_eval)
-        errors.append(np.max(diff))
+        diff = Fd_vals - fa_eval
+        errors.append(np.linalg.norm(diff, np.Inf))
         points.append(Fd_vals)
-    return errors,points
+    return errors, points
 
-def calculate_rho_from_inverse(xc, xs, a, b, d, fa_eval):
-    #rho = []
-    xq,w = np.polynomial.legendre.leggauss(np.shape(xc)[0]**2)
+
+def calculate_rho_from_inverse(xc, xs, Nq, a, b, d, fa_eval):
+    xq,w = np.polynomial.legendre.leggauss(Nq)
     w = w * (b-a)/2
     xq = (b+a)/2 + xq * (b-a)/2
-    A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
-    inv_A = np.linalg.inv(A)
-    rho = np.dot(inv_A, fa_eval)
+    A = fredholm_lhs(xc, xs, xq, d, w, kernel_fred)
+    rho = np.linalg.solve(A, fa_eval)
+
     return rho
 
+def analytical_force(a, b, omega, gamma , Nmax):
+    try:
+        Fa = pickle.load(open("F.pkl", "rb"))
 
-d = 0.025
+    except:
+        Fa = analytical_solution(a, b, omega, gamma, Nmax)
+        pickle.dump(Fa, open("F.pkl", "wb"))
+    return Fa
 
-Nnc = 40
-Nns = 40
-Nnq = 100
 
-a = 0
-b = 1
-
-print("Chebyshev")
-xc = chebyshev(a, b, Nnc)
-xs = chebyshev(a, b, Nns)
-
-w = (b - a) / (Nnq)
-
-omega = 3 * np.pi
-gamma = -2
-
-Nmax = 75
-
-print("Executing analytical_solution")
-try:
-    Fa = pickle.load(open("F.pkl", "rb"))
-
-except:
-    Fa = analytical_solution(a, b, omega, gamma, Nmax)
-    pickle.dump(Fa, open("F.pkl", "wb"))
-# Fa = analytical_solution(a, b, omega, gamma, 75)
-Fa_eval = fredholm_rhs(xc, Fa)
-
-# print("Executing fredholm")
-# A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
-p_analytical = analytic_density(xs, omega, gamma)
+# d = 0.025
+#
+# Nnc = 40
+# Nns = Nnc
+# Nnq = 100
+#
+# a = 0
+# b = 1
+#
+# print("Chebyshev")
+# xc = chebyshev(a, b, Nnc)
+# xs = xc
+#
+# w = (b - a) / (Nnq)
+#
+# omega = 3 * np.pi
+# gamma = -2
+#
+# Nmax = 75
+#
+# print("Executing analytical_solution")
+# Fa = analytical_force(a, b, omega, gamma, Nmax)
+# # Fa = analytical_solution(a, b, omega, gamma, 75)
+# Fa_eval = fredholm_rhs(xc, Fa)
+#
+# # print("Executing fredholm")
+# # A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
+# p_analytical = analytic_density(xs, omega, gamma)
 
 # print("Matrix product")
 # Fd_vals = A.dot(p_analytical)
@@ -145,22 +147,23 @@ p_analytical = analytic_density(xs, omega, gamma)
 # plt.plot(xc, Fd_vals, '--')
 # plt.plot(xc, Fa_eval, '-')
 
-def forward_problem():
-    top = 200
-    errors_NC, points_NC = newton_cotes(top, xc, xs, p_analytical, Fa_eval)
-    errors_LG, points_LG = legendre_gauss(top, xc, xs, p_analytical, a, b, Fa_eval)
-    # print(errors)
-
-    # plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
-
-    plt.figure(1)
-    plt.title(r"Error")
-    plt.xlabel(r"$N_q$")
-    plt.ylabel(r"$\max |F(x_i) - (\mathbf{A\hat{\rho}})_i|$")
-    nq_vals = np.arange(1, top + 1, 1)
-    plt.plot(nq_vals, errors_NC, label="Newton-Cote")
-    plt.plot(nq_vals, errors_LG, label="Legendre-Gauss", linestyle='--')
-    plt.legend()
+# def forward_problem():
+#     top = 100
+#     errors_NC, points_NC = newton_cotes(top, xc, xs, p_analytical, Fa_eval)
+#     errors_LG, points_LG = legendre_gauss(top, xc, xs, p_analytical, a, b, Fa_eval)
+#     # print(errors)
+#
+#     # plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+#
+#     plt.figure(1)
+#     plt.title(r"Error")
+#     plt.xlabel(r"$N_q$")
+#     plt.ylabel(r"$\max |F(x_i) - (\mathbf{A\hat{\rho}})_i|$")
+#     nq_vals = np.arange(1, top + 1, 1)
+#     plt.plot(nq_vals, errors_NC, label="Newton-Cotes")
+#     plt.plot(nq_vals, errors_LG, label="Legendre-Gauss", linestyle='--')
+#     plt.yscale('log')
+#     plt.legend()
 
     # t = 2
     # mod_amount = 8
@@ -205,14 +208,14 @@ def forward_problem():
 
     plt.show()
 
-def inverse_problem():
-    print("Inverse problem..")
-    plt.figure(1)
-    plt.title("Rho")
-    plt.plot(xs, p_analytical, label="Analytical")
-    rho_inverse = calculate_rho_from_inverse(xc, xs, a, b, d, Fa_eval)
-    plt.plot(xs, rho_inverse, label="Inverse")
-    plt.legend()
-    plt.show()
+# def inverse_problem():
+#     print("Inverse problem..")
+#     plt.figure(1)
+#     plt.title("Rho")
+#     plt.plot(xs, p_analytical, label="Analytical")
+#     rho_inverse = calculate_rho_from_inverse(xc, xs, a, b, d, Fa_eval)
+#     plt.plot(xs, rho_inverse, label="Inverse")
+#     plt.legend()
+#     plt.show()
 
-forward_problem()
+#forward_problem()
