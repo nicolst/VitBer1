@@ -50,7 +50,7 @@ def analytic_density(x, omega, gamma):
     return np.sin(omega * x) * np.exp(gamma * x)
 
 
-def newton_cotes(top_nq, xc, xs, rho):
+def newton_cotes(top_nq, xc, xs, rho, fa_eval):
     errors = []
     points = []
     for i in range(1, top_nq + 1):
@@ -60,12 +60,12 @@ def newton_cotes(top_nq, xc, xs, rho):
         # print(xq)
         A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
         Fd_vals = A.dot(rho)
-        diff = np.abs(Fd_vals - Fa_eval)
+        diff = np.abs(Fd_vals - fa_eval)
         errors.append(np.max(diff))
         points.append(Fd_vals)
     return errors, points
 
-def legendre_gauss(top_nq, xc, xs, rho, a, b):
+def legendre_gauss(top_nq, xc, xs, rho, a, b, fa_eval):
     errors = []
     points = []
     for i in range(1, top_nq + 1):
@@ -75,10 +75,20 @@ def legendre_gauss(top_nq, xc, xs, rho, a, b):
         xq = (b+a)/2 + xq*(b-a)/2
         A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
         Fd_vals = A.dot(rho)
-        diff = np.abs(Fd_vals - Fa_eval)
+        diff = np.abs(Fd_vals - fa_eval)
         errors.append(np.max(diff))
         points.append(Fd_vals)
     return errors,points
+
+def calculate_rho_from_inverse(xc, xs, a, b, d, fa_eval):
+    #rho = []
+    xq,w = np.polynomial.legendre.leggauss(np.shape(xc)[0]**2)
+    w = w * (b-a)/2
+    xq = (b+a)/2 + xq * (b-a)/2
+    A = fredholm_lhs(xc, xs, xq, w, kernel_fred)
+    inv_A = np.linalg.inv(A)
+    rho = np.dot(inv_A, fa_eval)
+    return rho
 
 
 d = 0.025
@@ -135,61 +145,74 @@ p_analytical = analytic_density(xs, omega, gamma)
 # plt.plot(xc, Fd_vals, '--')
 # plt.plot(xc, Fa_eval, '-')
 
-top = 40
-errors_NC, points_NC = newton_cotes(top, xc, xs, p_analytical)
-errors_LG, points_LG = legendre_gauss(top, xc, xs, p_analytical, a, b)
-#print(errors)
+def forward_problem():
+    top = 200
+    errors_NC, points_NC = newton_cotes(top, xc, xs, p_analytical, Fa_eval)
+    errors_LG, points_LG = legendre_gauss(top, xc, xs, p_analytical, a, b, Fa_eval)
+    # print(errors)
 
-#plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+    # plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
-plt.figure(1)
-plt.title(r"Error")
-plt.xlabel(r"$N_q$")
-plt.ylabel(r"$\max |F(x_i) - (\mathbf{A\hat{\rho}})_i|$")
-nq_vals = np.arange(1, top + 1, 1)
-plt.plot(nq_vals, errors_NC, label="Newton-Cote")
-plt.plot(nq_vals, errors_LG, label="Legendre-Gauss", linestyle='--')
-plt.legend()
+    plt.figure(1)
+    plt.title(r"Error")
+    plt.xlabel(r"$N_q$")
+    plt.ylabel(r"$\max |F(x_i) - (\mathbf{A\hat{\rho}})_i|$")
+    nq_vals = np.arange(1, top + 1, 1)
+    plt.plot(nq_vals, errors_NC, label="Newton-Cote")
+    plt.plot(nq_vals, errors_LG, label="Legendre-Gauss", linestyle='--')
+    plt.legend()
 
-t = 2
-mod_amount = 8
-count = 0
-for pointset in points_NC:
-    if count == mod_amount:
-        t += 1
-        count = 0
-        plt.plot(xc, Fa_eval, '--', label="Analytical")
-        plt.title("NC")
-        plt.legend()
-        plt.tight_layout()
+    # t = 2
+    # mod_amount = 8
+    # count = 0
+    # for pointset in points_NC:
+    #     if count == mod_amount:
+    #         t += 1
+    #         count = 0
+    #         plt.plot(xc, Fa_eval, '--', label="Analytical")
+    #         plt.title("NC")
+    #         plt.legend()
+    #         plt.tight_layout()
+    #
+    #     plt.figure(t)
+    #     plt.plot(xc, pointset, label="Nq = {0}".format((t - 2) * mod_amount + count + 1))
+    #     count += 1
+    # plt.plot(xc, Fa_eval, '--', label="Analytical")
+    # plt.title("NC")
+    # plt.legend()
+    # plt.tight_layout()
+    #
+    # if count > 0:
+    #     t += 1
+    # initial = t
+    # count = 0
+    # for pointset in points_LG:
+    #     if count == mod_amount:
+    #         t += 1
+    #         count = 0
+    #         plt.plot(xc, Fa_eval, '--', label="Analytical")
+    #         plt.title("LG")
+    #         plt.legend()
+    #         plt.tight_layout()
+    #
+    #     plt.figure(t)
+    #     plt.plot(xc, pointset, label="Nq = {0}".format((t - initial) * mod_amount + count + 1))
+    #     count += 1
+    # plt.plot(xc, Fa_eval, '--', label="Analytical")
+    # plt.title("LG")
+    # plt.legend()
+    # plt.tight_layout()
 
-    plt.figure(t)
-    plt.plot(xc, pointset, label="Nq = {0}".format((t-2)*mod_amount + count + 1))
-    count += 1
-plt.plot(xc, Fa_eval, '--', label="Analytical")
-plt.title("NC")
-plt.legend()
-plt.tight_layout()
+    plt.show()
 
-if count > 0:
-    t += 1
-initial = t
-count = 0
-for pointset in points_LG:
-    if count == mod_amount:
-        t += 1
-        count = 0
-        plt.plot(xc, Fa_eval, '--', label="Analytical")
-        plt.title("LG")
-        plt.legend()
-        plt.tight_layout()
+def inverse_problem():
+    print("Inverse problem..")
+    plt.figure(1)
+    plt.title("Rho")
+    plt.plot(xs, p_analytical, label="Analytical")
+    rho_inverse = calculate_rho_from_inverse(xc, xs, a, b, d, Fa_eval)
+    plt.plot(xs, rho_inverse, label="Inverse")
+    plt.legend()
+    plt.show()
 
-    plt.figure(t)
-    plt.plot(xc, pointset, label="Nq = {0}".format((t-initial)*mod_amount + count + 1))
-    count += 1
-plt.plot(xc, Fa_eval, '--', label="Analytical")
-plt.title("LG")
-plt.legend()
-plt.tight_layout()
-
-plt.show()
+forward_problem()
