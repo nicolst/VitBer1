@@ -79,13 +79,29 @@ def legendre_gauss(top_nq, xc, xs, rho, d, a, b, fa_eval):
     return errors, points
 
 
-def calculate_rho_from_inverse(xc, xs, Nq, a, b, d, fa_eval):
+def calculate_rho(xc, xs, Nq, a, b, d, fa_eval):
     xq,w = np.polynomial.legendre.leggauss(Nq)
     w = w * (b-a)/2
     xq = (b+a)/2 + xq * (b-a)/2
     A = fredholm_lhs(xc, xs, xq, d, w, kernel_fred)
     rho = np.linalg.solve(A, fa_eval)
 
+    return rho
+
+def calculate_rho_thikonoff(xc, xs, Nq, a, b, d, fa_eval, lmbda):
+    xq,w = np.polynomial.legendre.leggauss(Nq)
+    w = w * (b-a)/2
+    xq = (b+a)/2 + xq * (b-a)/2
+    A = fredholm_lhs(xc, xs, xq, d, w, kernel_fred)
+    A_T = np.matrix.transpose(A)
+    lhs = A_T.dot(A) + lmbda*np.identity(np.shape(xc)[0])
+    rhs = A_T.dot(fa_eval)
+    rho = np.linalg.solve(lhs, rhs)
+    return rho
+
+def calculate_rho_thikonoff_givenA(xc, lmbda, rhs, lhs_A):
+    lhs = lhs_A + lmbda*np.identity(np.shape(xc)[0])
+    rho = np.linalg.solve(lhs, rhs)
     return rho
 
 def analytical_force(a, b, omega, gamma , Nmax):

@@ -74,7 +74,6 @@ class analytical_solution:
         """
         Evaluate the initialized object at x_eval
         """
-        print("called...")
         if self.cns == []:
             self.perform_lambdification()
         if np.isscalar(x_eval):
